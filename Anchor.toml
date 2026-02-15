@@ -5,14 +5,14 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-quadratic_voting = "4GXwiTJSXK7Q5oN91fG8KGz4PLgH7k6bhvGLNvdfmFbF"
+[programs.devnet]
+quadratic_voting = "2QSbhTqaFrhpKKvyNVB9UucJ5gJzdyqjRA6i7CATNLut"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
