@@ -6,7 +6,7 @@ pub mod state;
 use contexts::*;    
 use state::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("2QSbhTqaFrhpKKvyNVB9UucJ5gJzdyqjRA6i7CATNLut");
 
 #[program]
 pub mod quadratic_voting {
