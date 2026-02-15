@@ -23,18 +23,46 @@ describe("quadratic_voting", () => {
   const optionCount = 4; // Rust, TypeScript, Python, Go
 
   before(async () => {
-    // Airdrop SOL to voters
-    const airdropTx1 = await provider.connection.requestAirdrop(
-      voter1.publicKey,
-      2 * anchor.web3.LAMPORTS_PER_SOL
-    );
-    await provider.connection.confirmTransaction(airdropTx1);
+    // Airdrop SOL to voters with retries (for devnet)
+    console.log("💰 Airdropping to voter1...");
+    for (let i = 0; i < 5; i++) {
+      try {
+        const airdropTx1 = await provider.connection.requestAirdrop(
+          voter1.publicKey,
+          2 * anchor.web3.LAMPORTS_PER_SOL
+        );
+        await provider.connection.confirmTransaction(airdropTx1);
+        console.log("✅ Voter1 funded");
+        break;
+      } catch (e) {
+        console.log(`  Retry ${i + 1}/5 for voter1...`);
+        if (i === 4) {
+          console.error("❌ Failed to fund voter1:", e);
+          throw e;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
-    const airdropTx2 = await provider.connection.requestAirdrop(
-      voter2.publicKey,
-      2 * anchor.web3.LAMPORTS_PER_SOL
-    );
-    await provider.connection.confirmTransaction(airdropTx2);
+    console.log("💰 Airdropping to voter2...");
+    for (let i = 0; i < 5; i++) {
+      try {
+        const airdropTx2 = await provider.connection.requestAirdrop(
+          voter2.publicKey,
+          2 * anchor.web3.LAMPORTS_PER_SOL
+        );
+        await provider.connection.confirmTransaction(airdropTx2);
+        console.log("✅ Voter2 funded");
+        break;
+      } catch (e) {
+        console.log(`  Retry ${i + 1}/5 for voter2...`);
+        if (i === 4) {
+          console.error("❌ Failed to fund voter2:", e);
+          throw e;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
     // Derive PDAs
     [pollPDA] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -51,6 +79,8 @@ describe("quadratic_voting", () => {
       [Buffer.from("voter"), pollPDA.toBuffer(), voter2.publicKey.toBuffer()],
       program.programId
     );
+
+    console.log("✅ Setup complete\n");
   });
 
   it("Creates a poll", async () => {
@@ -198,7 +228,7 @@ describe("quadratic_voting", () => {
         .signers([voter2])
         .rpc();
       expect.fail("Should have failed with insufficient credits");
-    } catch (err) {
+    } catch (err: any) {
       expect(err.toString()).to.include("InsufficientCredits");
     }
   });
@@ -228,7 +258,7 @@ describe("quadratic_voting", () => {
         .signers([voter1])
         .rpc();
       expect.fail("Should have failed - poll is closed");
-    } catch (err) {
+    } catch (err: any) {
       expect(err.toString()).to.include("PollNotActive");
     }
   });
