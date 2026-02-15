@@ -22,46 +22,44 @@ describe("quadratic_voting", () => {
   const pollDescription = "Vote for your favorite programming language";
   const optionCount = 4; // Rust, TypeScript, Python, Go
 
-  before(async () => {
-    // Airdrop SOL to voters with retries (for devnet)
-    console.log("💰 Airdropping to voter1...");
-    for (let i = 0; i < 5; i++) {
+  // Helper function to airdrop with retries
+  async function airdropWithRetry(publicKey: anchor.web3.PublicKey, amount: number, retries = 5) {
+    for (let i = 0; i < retries; i++) {
       try {
-        const airdropTx1 = await provider.connection.requestAirdrop(
-          voter1.publicKey,
-          2 * anchor.web3.LAMPORTS_PER_SOL
-        );
-        await provider.connection.confirmTransaction(airdropTx1);
-        console.log("✅ Voter1 funded");
-        break;
-      } catch (e) {
-        console.log(`  Retry ${i + 1}/5 for voter1...`);
-        if (i === 4) {
-          console.error("❌ Failed to fund voter1:", e);
-          throw e;
+        console.log(`  Attempting airdrop to ${publicKey.toBase58()} (attempt ${i + 1}/${retries})...`);
+        const signature = await provider.connection.requestAirdrop(publicKey, amount);
+        
+        // Wait for confirmation with timeout
+        const latestBlockhash = await provider.connection.getLatestBlockhash();
+        await provider.connection.confirmTransaction({
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        });
+        
+        console.log(`  ✅ Airdrop successful!`);
+        return;
+      } catch (error) {
+        console.log(`  ⚠️ Airdrop attempt ${i + 1} failed:`, error.message);
+        if (i === retries - 1) {
+          throw new Error(`Failed to airdrop after ${retries} attempts: ${error.message}`);
         }
+        // Wait before retry
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
+  }
 
-    console.log("💰 Airdropping to voter2...");
-    for (let i = 0; i < 5; i++) {
-      try {
-        const airdropTx2 = await provider.connection.requestAirdrop(
-          voter2.publicKey,
-          2 * anchor.web3.LAMPORTS_PER_SOL
-        );
-        await provider.connection.confirmTransaction(airdropTx2);
-        console.log("✅ Voter2 funded");
-        break;
-      } catch (e) {
-        console.log(`  Retry ${i + 1}/5 for voter2...`);
-        if (i === 4) {
-          console.error("❌ Failed to fund voter2:", e);
-          throw e;
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+  before(async () => {
+    console.log("\n🔧 Setting up test environment...");
+    
+    // Airdrop SOL to voters with retry logic
+    try {
+      await airdropWithRetry(voter1.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
+      await airdropWithRetry(voter2.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
+    } catch (error) {
+      console.error("❌ Failed to airdrop SOL:", error);
+      throw error;
     }
 
     // Derive PDAs
@@ -80,7 +78,10 @@ describe("quadratic_voting", () => {
       program.programId
     );
 
-    console.log("✅ Setup complete\n");
+    console.log("✅ Test environment ready!");
+    console.log(`   Poll PDA: ${pollPDA.toBase58()}`);
+    console.log(`   Voter 1 PDA: ${voter1PDA.toBase58()}`);
+    console.log(`   Voter 2 PDA: ${voter2PDA.toBase58()}`);
   });
 
   it("Creates a poll", async () => {
@@ -100,6 +101,8 @@ describe("quadratic_voting", () => {
     expect(poll.isActive).to.be.true;
     expect(poll.votes).to.have.lengthOf(optionCount);
     expect(poll.votes.every((v) => v.toNumber() === 0)).to.be.true;
+    
+    console.log(`   ✅ Poll created: "${poll.title}"`);
   });
 
   it("Registers voter 1 with 100 credits", async () => {
@@ -118,6 +121,8 @@ describe("quadratic_voting", () => {
     expect(voterAccount.creditsRemaining.toNumber()).to.equal(100);
     expect(voterAccount.totalCredits.toNumber()).to.equal(100);
     expect(voterAccount.votesCast).to.have.lengthOf(optionCount);
+    
+    console.log(`   ✅ Voter 1 registered with ${voterAccount.totalCredits} credits`);
   });
 
   it("Registers voter 2 with 50 credits", async () => {
@@ -134,6 +139,8 @@ describe("quadratic_voting", () => {
 
     const voterAccount = await program.account.voter.fetch(voter2PDA);
     expect(voterAccount.creditsRemaining.toNumber()).to.equal(50);
+    
+    console.log(`   ✅ Voter 2 registered with ${voterAccount.totalCredits} credits`);
   });
 
   it("Voter 1 casts 5 votes for Rust (costs 25 credits)", async () => {
@@ -154,6 +161,8 @@ describe("quadratic_voting", () => {
 
     const poll = await program.account.poll.fetch(pollPDA);
     expect(poll.votes[0].toNumber()).to.equal(5);
+    
+    console.log(`   ✅ Voter 1 cast 5 votes (cost: 25, remaining: ${voterAccount.creditsRemaining})`);
   });
 
   it("Voter 1 adds 2 more votes for Rust (costs 24 credits)", async () => {
@@ -175,6 +184,8 @@ describe("quadratic_voting", () => {
 
     const poll = await program.account.poll.fetch(pollPDA);
     expect(poll.votes[0].toNumber()).to.equal(7);
+    
+    console.log(`   ✅ Voter 1 added 2 more votes (cost: 24, remaining: ${voterAccount.creditsRemaining})`);
   });
 
   it("Voter 1 casts 3 votes for Python (costs 9 credits)", async () => {
@@ -194,6 +205,8 @@ describe("quadratic_voting", () => {
 
     const poll = await program.account.poll.fetch(pollPDA);
     expect(poll.votes[2].toNumber()).to.equal(3);
+    
+    console.log(`   ✅ Voter 1 cast 3 votes for Python (cost: 9, remaining: ${voterAccount.creditsRemaining})`);
   });
 
   it("Voter 2 casts 7 votes for TypeScript (costs 49 credits)", async () => {
@@ -213,6 +226,8 @@ describe("quadratic_voting", () => {
 
     const poll = await program.account.poll.fetch(pollPDA);
     expect(poll.votes[1].toNumber()).to.equal(7);
+    
+    console.log(`   ✅ Voter 2 cast 7 votes for TypeScript (cost: 49, remaining: ${voterAccount.creditsRemaining})`);
   });
 
   it("Fails when voter has insufficient credits", async () => {
@@ -228,8 +243,9 @@ describe("quadratic_voting", () => {
         .signers([voter2])
         .rpc();
       expect.fail("Should have failed with insufficient credits");
-    } catch (err: any) {
+    } catch (err) {
       expect(err.toString()).to.include("InsufficientCredits");
+      console.log(`   ✅ Correctly rejected vote with insufficient credits`);
     }
   });
 
@@ -244,6 +260,8 @@ describe("quadratic_voting", () => {
 
     const poll = await program.account.poll.fetch(pollPDA);
     expect(poll.isActive).to.be.false;
+    
+    console.log(`   ✅ Poll closed successfully`);
   });
 
   it("Fails to vote on closed poll", async () => {
@@ -258,19 +276,32 @@ describe("quadratic_voting", () => {
         .signers([voter1])
         .rpc();
       expect.fail("Should have failed - poll is closed");
-    } catch (err: any) {
+    } catch (err) {
       expect(err.toString()).to.include("PollNotActive");
+      console.log(`   ✅ Correctly rejected vote on closed poll`);
     }
   });
 
   it("Displays final results", async () => {
     const poll = await program.account.poll.fetch(pollPDA);
-    console.log("\n=== Final Poll Results ===");
-    console.log(`Poll: ${poll.title}`);
-    console.log(`Option 0 (Rust): ${poll.votes[0].toNumber()} votes`);
-    console.log(`Option 1 (TypeScript): ${poll.votes[1].toNumber()} votes`);
-    console.log(`Option 2 (Python): ${poll.votes[2].toNumber()} votes`);
-    console.log(`Option 3 (Go): ${poll.votes[3].toNumber()} votes`);
-    console.log("========================\n");
+    console.log("\n" + "=".repeat(50));
+    console.log("🏆 FINAL POLL RESULTS");
+    console.log("=".repeat(50));
+    console.log(`📊 Poll: "${poll.title}"`);
+    console.log(`📝 Description: "${poll.description}"`);
+    console.log("─".repeat(50));
+    console.log(`🦀 Option 0 (Rust):       ${poll.votes[0].toNumber()} votes`);
+    console.log(`📘 Option 1 (TypeScript): ${poll.votes[1].toNumber()} votes`);
+    console.log(`🐍 Option 2 (Python):     ${poll.votes[2].toNumber()} votes`);
+    console.log(`🔷 Option 3 (Go):         ${poll.votes[3].toNumber()} votes`);
+    console.log("=".repeat(50));
+    console.log("🎉 All tests passed! Quadratic voting works perfectly!");
+    console.log("=".repeat(50) + "\n");
+    
+    // Verify the results match expected values
+    expect(poll.votes[0].toNumber()).to.equal(7);  // Rust
+    expect(poll.votes[1].toNumber()).to.equal(7);  // TypeScript
+    expect(poll.votes[2].toNumber()).to.equal(3);  // Python
+    expect(poll.votes[3].toNumber()).to.equal(0);  // Go
   });
 });
